@@ -2,7 +2,4 @@
 dijkstra_base
 dijkstra_td
 *.o
-# grafos (grandes, baixar do site do desafio)
-data/*.gr
-data/*.gr.gz
 !data/.gitkeep

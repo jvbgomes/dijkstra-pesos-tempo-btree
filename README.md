@@ -7,9 +7,9 @@ armazenar os pesos dependentes do tempo das arestas: vetor indexado, tabela hash
 
 ## Dados
 
-Grafo de Nova York do 9th DIMACS Implementation Challenge (264.346 vértices, 733.846 arcos).
-Baixe `USA-road-t.NY.gr.gz` (tempo de viagem) em http://www.dis.uniroma1.it/~challenge9 ,
-descompacte e coloque em `data/`. Os grafos não são versionados.
+O grafo de Nova York do 9th DIMACS Implementation Challenge (tempo de viagem, 264.346 vértices e
+733.846 arcos) já está incluído em `data/USA-road-t.NY.gr`. Os dados são de domínio público.
+Fonte original: https://www.diag.uniroma1.it/challenge9/download.shtml
 
 ## Como compilar e rodar
 
