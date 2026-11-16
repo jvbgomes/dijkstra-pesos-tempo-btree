@@ -12,13 +12,13 @@ O grafo de Nova York do 9th DIMACS Implementation Challenge (tempo de viagem, 26
 733.846 arcos) já está incluído em `data/USA-road-t.NY.gr`. Os dados são de domínio público.
 Fonte original: https://www.diag.uniroma1.it/challenge9/download.shtml
 
-**Unidade dos pesos:** centésimos de segundo (cs). Os valores no arquivo `-t` representam
-tempo de viagem em cs; 24 h = 8.640.000 cs. Os defaults de `--passo` (30.000 cs = 5 min) e
-`--horizonte` (8.640.000 cs = 24 h) refletem isso.
+**Unidade dos pesos:** unidades de tempo do grafo (a página do DIMACS não especifica a unidade
+absoluta). O experimento adota a convenção de que o horizonte equivale a 24 h, o que define a
+escala. Os defaults de `--passo` (30.000) e `--horizonte` (8.640.000) seguem essa convenção.
 
 ## Como compilar
 
-    make dijkstra_td_bplus   # compila com suporte a todas as 5 variantes (padrão para experimentos)
+    make dijkstra_td          # compila com suporte a todas as 5 variantes (padrão para experimentos)
     make dijkstra_base        # baseline estático
     make test_bplus           # teste isolado da B+ contra std::map
 
@@ -44,8 +44,8 @@ As opções completas estão no topo de `src/dijkstra_td.cpp`. As principais:
 | Opção | Padrão | Descrição |
 |---|---|---|
 | `--frac F` | 0.10 | Fração das arestas com histórico de tráfego |
-| `--passo P` | 30000 | Intervalo entre leituras em cs (30000 cs = 5 min) |
-| `--horizonte H` | 8640000 | Duração total do histórico em cs (8640000 cs = 24 h) |
+| `--passo P` | 30000 | Intervalo entre leituras (convenção: 30000 ≈ 5 min na escala de 24 h) |
+| `--horizonte H` | 8640000 | Duração total do histórico (convenção: 8640000 = 24 h) |
 | `--irregular` | off | Horários com variação aleatória (como GPS real) |
 | `--ordem O` | tempo | Ordem de ingestão: `tempo` (slot-major), `chave` (edge-major), `aleatorio` |
 | `--origens N` | 20 | Número de origens sorteadas |

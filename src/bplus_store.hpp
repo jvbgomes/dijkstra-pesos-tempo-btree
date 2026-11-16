@@ -6,7 +6,6 @@
 #pragma once
 #include <algorithm>
 #include <cstring>
-#include <climits>
 #include "traffic_types.hpp"
 
 #ifndef BPLUS_ORDER
@@ -40,11 +39,14 @@ struct BPlusStore {
     bool  root_is_leaf = true;
 
     BPlusStore() {
-        Leaf* l = new Leaf();
-        root = l; root_is_leaf = true;
+        root = new Leaf();
+        root_is_leaf = true;
     }
     explicit BPlusStore(const Traffic&) : BPlusStore() {}
     ~BPlusStore() { destroy(root, root_is_leaf); }
+
+    BPlusStore(const BPlusStore&) = delete;
+    BPlusStore& operator=(const BPlusStore&) = delete;
 
     void destroy(void* node, bool is_leaf) {
         if (!node) return;
@@ -88,7 +90,9 @@ struct BPlusStore {
             return true;
         }
         Inner* in = static_cast<Inner*>(node);
-        int ci = (int)(std::lower_bound(in->keys, in->keys + in->n, k) - in->keys);
+        // upper_bound: chave igual ao separador pertence ao filho da DIREITA (separador e
+        // a primeira chave do filho direito apos o split), evitando o bug de chaves repetidas.
+        int ci = (int)(std::upper_bound(in->keys, in->keys + in->n, k) - in->keys);
         SplitResult csr{};
         if (!insert_node(in->child[ci], in->child_is_leaf[ci], k, val, csr)) return false;
         std::memmove(in->keys + ci + 1, in->keys + ci, (in->n - ci) * sizeof(BKey));
@@ -112,39 +116,48 @@ struct BPlusStore {
     }
 
     int query(int id, int t) const {
-        BKey lo{id, INT_MIN};
-        const Leaf* l = find_leaf(lo);
+        // Desce ate a folha que contem (id, t) ou seu predecessor imediato.
+        // Com upper_bound nos nos internos, o predecessor esta em keys[pos-1] da folha
+        // de chegada; o sucessor em keys[pos] ou na primeira posicao da proxima folha.
+        BKey qk{id, t};
+        const Leaf* l = find_leaf(qk);
         if (!l) return 0;
-        Reading prev_buf{}, next_buf{};
-        const Reading* prev_r = nullptr;
-        const Reading* next_r = nullptr;
-        for (const Leaf* cur = l; cur; cur = cur->next) {
-            bool done = false;
-            for (int i = 0; i < cur->n; ++i) {
-                if (cur->keys[i].id != id) {
-                    if (cur->keys[i].id > id) { done = true; break; }
-                    continue;
-                }
-                if (cur->keys[i].t <= t) {
-                    prev_buf = {cur->keys[i].t, cur->vals[i]}; prev_r = &prev_buf;
-                } else {
-                    next_buf = {cur->keys[i].t, cur->vals[i]}; next_r = &next_buf;
-                    done = true; break;
-                }
-            }
-            if (done) break;
+
+        int pos = (int)(std::lower_bound(l->keys, l->keys + l->n, qk) - l->keys);
+
+        // correspondencia exata
+        if (pos < l->n && l->keys[pos] == qk)
+            return l->vals[pos];
+
+        // predecessor: ultima leitura da aresta com t' < t
+        Reading prev_r{};
+        bool has_prev = (pos > 0 && l->keys[pos - 1].id == id);
+        if (has_prev)
+            prev_r = {l->keys[pos - 1].t, l->vals[pos - 1]};
+
+        // sucessor: primeira leitura da aresta com t' > t
+        Reading next_r{};
+        bool has_next = false;
+        if (pos < l->n && l->keys[pos].id == id) {
+            next_r  = {l->keys[pos].t, l->vals[pos]};
+            has_next = true;
+        } else if (l->next && l->next->n > 0 && l->next->keys[0].id == id) {
+            next_r  = {l->next->keys[0].t, l->next->vals[0]};
+            has_next = true;
         }
-        if (!prev_r && !next_r) return 0;
-        if (!prev_r) return next_r->w;
-        if (!next_r) return prev_r->w;
-        return interp(*prev_r, *next_r, t);
+
+        if (!has_prev && !has_next) return 0;
+        if (!has_prev) return next_r.w;
+        if (!has_next) return prev_r.w;
+        return interp(prev_r, next_r, t);
     }
 
     const Leaf* find_leaf(const BKey& k) const {
         if (root_is_leaf) return static_cast<const Leaf*>(root);
         const Inner* in = static_cast<const Inner*>(root);
         while (true) {
-            int ci = (int)(std::lower_bound(in->keys, in->keys + in->n, k) - in->keys);
+            // upper_bound: consistente com insert_node (chave igual ao separador -> filho direito)
+            int ci = (int)(std::upper_bound(in->keys, in->keys + in->n, k) - in->keys);
             if (in->child_is_leaf[ci]) return static_cast<const Leaf*>(in->child[ci]);
             in = static_cast<const Inner*>(in->child[ci]);
         }
