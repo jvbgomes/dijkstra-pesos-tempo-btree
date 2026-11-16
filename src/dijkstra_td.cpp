@@ -10,22 +10,24 @@
 //   ./dijkstra_td <grafo.gr> <variante> [opcoes] > resultados_<variante>.csv
 //
 // Variantes:
-//   array  vetor indexado pelo horario (O(1)); so funciona com leituras em grade regular
-//   hash   unordered_map (aresta, slot);       so funciona com leituras em grade regular
-//   map    std::map (arvore rubro-negra), chave (aresta, horario); aceita horarios irregulares
-//   vec    vetor ordenado por aresta + busca binaria;              aceita horarios irregulares
-//   bplus  arvore B+ (ver bplus_store.hpp)
+//   array   vetor indexado pelo horario (O(1)); so funciona com grade regular e K uniforme
+//   hash    unordered_map (aresta, slot);       so funciona com grade regular e K uniforme
+//   map     std::map (arvore rubro-negra), chave (aresta, horario); aceita irregular e K variavel
+//   vec     vetor ordenado por aresta + busca binaria;              aceita irregular, K uniforme
+//   dynvec  vector<Reading> por aresta, insercao ordenada;          aceita irregular e K variavel
+//   bplus   arvore B+ (ver bplus_store.hpp);                        aceita irregular e K variavel
 //
 // Opcoes (valores padrao entre parenteses):
 //   --origens N      numero de origens sorteadas (20)
 //   --semente S      semente das origens, igual a do baseline (42)
 //   --frac F         fracao das arestas que tem historico de trafego (0.10)
-//   --passo P        intervalo entre leituras em centesimos de segundo (30000 = 5 min)
-//   --horizonte H    duracao total do historico em cs (8640000 = 24 h)
+//   --passo P        intervalo entre leituras (30000; horizonte padrao = 8640000 ~ 24 h)
+//   --horizonte H    duracao total do historico (8640000)
 //   --irregular      horarios das leituras com variacao aleatoria (como GPS)
+//   --k-variavel     K diferente por aresta (sorteado em [K/4, K]); habilita cenario dynvec
 //   --ordem O        ordem de ingestao das leituras: "tempo" (padrao, como chegam do sensor),
 //                    "chave" (ordenado por aresta, melhor caso para arvores) ou
-//                    "aleatorio" (embaralhado; B+ sem pre-alocacao por aresta)
+//                    "aleatorio" (embaralhado; B+ e dynvec sem pre-alocacao por aresta)
 //   --saida T        horario de partida das consultas (horizonte/3)
 //   --aquecimento K  execucoes descartadas antes de medir (1)
 //   --resumo ARQ     acrescenta uma linha de resumo (construcao, memoria, mediana) neste CSV
@@ -112,42 +114,57 @@ Graph read_dimacs(const string& path) {
 // flat[id*K + k]: k = 0..K-1, ordenadas por t
 
 // Gera as series. FIFO: a leitura k nunca cai mais que (t_k - t_{k-1}) em relacao a k-1.
+// Com k_variavel=true cada aresta recebe K_e in [K/4, K] sorteado, simulando sensores com
+// historicos de tamanhos diferentes (cenario justo para DynVecStore vs map/bplus).
 Traffic gerar_trafego(const Graph& g, double frac, int step, int horizon, bool irregular,
-                      unsigned seed) {
+                      bool k_variavel, unsigned seed) {
     Traffic tr;
     tr.step = step;
     tr.horizon = (horizon / step) * step;
-    tr.K = tr.horizon / step + 1;
+    tr.K = tr.horizon / step + 1;  // K maximo (ou K uniforme se !k_variavel)
     mt19937 rng(seed);
     uniform_real_distribution<double> U(0.0, 1.0);
     int m = (int)g.to.size();
     tr.td_id.assign(m, -1);
     for (int e = 0; e < m; ++e)
         if (U(rng) < frac) tr.td_id[e] = tr.n_td++;
-    tr.flat.resize((size_t)tr.n_td * tr.K);
 
-    vector<int> times(tr.K);
+    if (k_variavel) {
+        // sorteia K por aresta, constroi soma-prefixo e redimensiona flat
+        tr.edge_k.resize(tr.n_td);
+        uniform_int_distribution<int> kd(max(2, tr.K / 4), tr.K);
+        for (int id = 0; id < tr.n_td; ++id) tr.edge_k[id] = kd(rng);
+        tr.edge_off.resize(tr.n_td + 1);
+        tr.edge_off[0] = 0;
+        for (int id = 0; id < tr.n_td; ++id)
+            tr.edge_off[id + 1] = tr.edge_off[id] + tr.edge_k[id];
+        tr.flat.resize(tr.edge_off[tr.n_td]);
+    } else {
+        tr.flat.resize((size_t)tr.n_td * tr.K);
+    }
+
     auto sq = [](double x) { return x * x; };
     for (int e = 0; e < m; ++e) {
         int id = tr.td_id[e];
         if (id < 0) continue;
-        for (int k = 0; k < tr.K; ++k) {
+        int K_e = tr.edge_K(id);
+        vector<int> times(K_e);
+        for (int k = 0; k < K_e; ++k) {
             times[k] = k * step;
-            if (irregular && k > 0 && k < tr.K - 1) {
-                int j = (int)lround((U(rng) - 0.5) * 0.5 * step);  // +-step/4
+            if (irregular && k > 0 && k < K_e - 1) {
+                int j = (int)lround((U(rng) - 0.5) * 0.5 * step);
                 times[k] += j;
             }
         }
-        double A = 0.5 + 2.5 * U(rng);  // intensidade do congestionamento desta via
+        double A = 0.5 + 2.5 * U(rng);
         int prevw = 0;
-        for (int k = 0; k < tr.K; ++k) {
-            double x = (double)times[k] / tr.horizon;  // fracao do dia
-            // dois picos: ~8h e ~18h
+        for (int k = 0; k < K_e; ++k) {
+            double x = (double)times[k] / tr.horizon;
             double f = 1.0 + A * (exp(-sq((x - 8.0 / 24) / 0.05)) + exp(-sq((x - 18.0 / 24) / 0.05)));
             double ruido = 1.0 + 0.10 * (U(rng) - 0.5);
             int w = max(1, (int)lround(g.w[e] * f * ruido));
             if (k > 0) w = max(w, prevw - (times[k] - times[k - 1]));  // garante FIFO
-            tr.flat[(size_t)id * tr.K + k] = {times[k], w};
+            tr.flat[tr.flat_idx(id, k)] = {times[k], w};
             prevw = w;
         }
     }
@@ -211,6 +228,7 @@ struct MapStore {
 };
 
 // 4) Vetor ordenado (um bloco contiguo por aresta) + busca binaria. Aceita horarios irregulares.
+//    Requer K uniforme: pre-aloca n_td * K slots; nao suporta --k-variavel.
 struct VecStore {
     int K;
     vector<Reading> r;
@@ -222,6 +240,32 @@ struct VecStore {
         if (t <= b->t) return b->w;
         if (t >= (e - 1)->t) return (e - 1)->w;
         const Reading* it = upper_bound(b, e, t, [](int tt, const Reading& x) { return tt < x.t; });
+        return interp(*(it - 1), *it, t);
+    }
+};
+
+// 5) Vetor dinamico por aresta com insercao ordenada. Aceita K variavel e ingestao incremental.
+//    Concorrente justo do vec no cenario --k-variavel: usa so a memoria necessaria por aresta,
+//    mas tem insercao O(K_e) vs O(1) do vec (que exige k conhecido na hora da insercao).
+struct DynVecStore {
+    vector<vector<Reading>> buckets;
+    explicit DynVecStore(const Traffic& tr) : buckets(tr.n_td) {}
+    void insert(int id, int /*k*/, const Reading& r) {
+        auto& b = buckets[id];
+        auto it = lower_bound(b.begin(), b.end(), r.t,
+                              [](const Reading& x, int t) { return x.t < t; });
+        if (it != b.end() && it->t == r.t)
+            it->w = r.w;  // sobreescreve leitura com mesmo horario
+        else
+            b.insert(it, r);
+    }
+    int query(int id, int t) const {
+        const auto& b = buckets[id];
+        if (b.empty()) return 0;
+        if (t <= b.front().t) return b.front().w;
+        if (t >= b.back().t)  return b.back().w;
+        auto it = upper_bound(b.begin(), b.end(), t,
+                              [](int tt, const Reading& x) { return tt < x.t; });
         return interp(*(it - 1), *it, t);
     }
 };
@@ -294,15 +338,15 @@ double ms_desde(Clock::time_point t) {
     return chrono::duration<double, milli>(Clock::now() - t).count();
 }
 
-// Unidade dos pesos no formato DIMACS road-t: centesimos de segundo (cs).
-// 24 h = 86400 s = 8.640.000 cs.  Passo padrao: 30.000 cs = 5 minutos.
-// Referencia: 9th DIMACS Challenge README, secao "edge weights".
+// Unidade dos pesos no formato DIMACS road-t: unidades de tempo do grafo (pagina do DIMACS
+// nao especifica unidade absoluta). O experimento adota a convencao de que horizonte=8640000
+// equivale a 24 h, o que fixa a escala. O trafego e sintetico de qualquer forma.
 struct Opcoes {
     string grafo, variante, resumo;
     int origens = 20, passo = 30000, horizonte = 8640000, aquecimento = 1;
     unsigned semente = 42;
     double frac = 0.10;
-    bool irregular = false, verificar = false;
+    bool irregular = false, verificar = false, k_variavel = false;
     string ordem = "tempo";  // "tempo" | "chave" | "aleatorio"
     long long saida = -1;
 };
@@ -314,20 +358,24 @@ int executar(const Opcoes& op, const Graph& g, Traffic& tr, double mem_grafo) {
     Store st(tr);
     if (op.ordem == "tempo") {  // slot-major: todas as arestas para k=0, depois k=1...
         for (int k = 0; k < tr.K; ++k)
-            for (int id = 0; id < tr.n_td; ++id) st.insert(id, k, tr.flat[(size_t)id * tr.K + k]);
+            for (int id = 0; id < tr.n_td; ++id)
+                if (k < tr.edge_K(id))
+                    st.insert(id, k, tr.flat[tr.flat_idx(id, k)]);
     } else if (op.ordem == "chave") {  // edge-major: todas as leituras da aresta 0, depois 1...
         for (int id = 0; id < tr.n_td; ++id)
-            for (int k = 0; k < tr.K; ++k) st.insert(id, k, tr.flat[(size_t)id * tr.K + k]);
+            for (int k = 0; k < tr.edge_K(id); ++k)
+                st.insert(id, k, tr.flat[tr.flat_idx(id, k)]);
     } else {  // aleatorio: ordem completamente aleatoria (ingestao incremental sem pre-alocacao)
-        size_t total = tr.flat.size();
-        vector<size_t> idx(total);
-        iota(idx.begin(), idx.end(), 0);
+        // Enumeramos todos os pares (id, k) e embaralhamos — funciona para K uniforme e variavel.
+        vector<pair<int,int>> pairs;
+        pairs.reserve(tr.flat.size());
+        for (int id = 0; id < tr.n_td; ++id)
+            for (int k = 0; k < tr.edge_K(id); ++k)
+                pairs.push_back({id, k});
         mt19937 rng_ord(op.semente + 999);
-        shuffle(idx.begin(), idx.end(), rng_ord);
-        for (size_t pos : idx) {
-            int id = (int)(pos / tr.K), k = (int)(pos % tr.K);
-            st.insert(id, k, tr.flat[pos]);
-        }
+        shuffle(pairs.begin(), pairs.end(), rng_ord);
+        for (auto [id, k] : pairs)
+            st.insert(id, k, tr.flat[tr.flat_idx(id, k)]);
     }
     double build_ms = ms_desde(tb);
     size_t leituras = tr.flat.size();
@@ -396,7 +444,7 @@ int executar(const Opcoes& op, const Graph& g, Traffic& tr, double mem_grafo) {
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        cerr << "Uso: " << argv[0] << " <grafo.gr> <array|hash|map|vec|bplus> [opcoes] (veja o topo do arquivo)\n";
+        cerr << "Uso: " << argv[0] << " <grafo.gr> <array|hash|map|vec|dynvec|bplus> [opcoes] (veja o topo do arquivo)\n";
         return 1;
     }
     Opcoes op;
@@ -414,6 +462,7 @@ int main(int argc, char** argv) {
         else if (a == "--passo") op.passo = stoi(prox());
         else if (a == "--horizonte") op.horizonte = stoi(prox());
         else if (a == "--irregular") op.irregular = true;
+        else if (a == "--k-variavel") op.k_variavel = true;
         else if (a == "--ordem") { op.ordem = prox(); if (op.ordem != "tempo" && op.ordem != "chave" && op.ordem != "aleatorio") { cerr << "--ordem deve ser tempo, chave ou aleatorio\n"; return 1; } }
         else if (a == "--saida") op.saida = stoll(prox());
         else if (a == "--aquecimento") op.aquecimento = stoi(prox());
@@ -422,20 +471,26 @@ int main(int argc, char** argv) {
         else { cerr << "Opcao desconhecida: " << a << "\n"; return 1; }
     }
     if ((op.variante == "array" || op.variante == "hash") && op.irregular) {
-        cerr << "As variantes array e hash exigem leituras em grade regular (tire --irregular).\n";
+        cerr << "As variantes array e hash exigem grade regular (tire --irregular).\n";
+        return 1;
+    }
+    if ((op.variante == "array" || op.variante == "hash" || op.variante == "vec") && op.k_variavel) {
+        cerr << "As variantes array, hash e vec nao suportam --k-variavel (K deve ser uniforme).\n";
         return 1;
     }
 
     Graph g = read_dimacs(op.grafo);
     cerr << "Grafo: " << g.n << " vertices, " << g.to.size() << " arestas\n";
     double mem_grafo = rss_mb();
-    Traffic tr = gerar_trafego(g, op.frac, op.passo, op.horizonte, op.irregular, op.semente + 1);
+    Traffic tr = gerar_trafego(g, op.frac, op.passo, op.horizonte, op.irregular,
+                               op.k_variavel, op.semente + 1);
 
-    if (op.variante == "array") return executar<ArrayStore>(op, g, tr, mem_grafo);
-    if (op.variante == "hash") return executar<HashStore>(op, g, tr, mem_grafo);
-    if (op.variante == "map") return executar<MapStore>(op, g, tr, mem_grafo);
-    if (op.variante == "vec") return executar<VecStore>(op, g, tr, mem_grafo);
-    if (op.variante == "bplus") return executar<BPlusStore>(op, g, tr, mem_grafo);
+    if (op.variante == "array")  return executar<ArrayStore> (op, g, tr, mem_grafo);
+    if (op.variante == "hash")   return executar<HashStore>  (op, g, tr, mem_grafo);
+    if (op.variante == "map")    return executar<MapStore>   (op, g, tr, mem_grafo);
+    if (op.variante == "vec")    return executar<VecStore>   (op, g, tr, mem_grafo);
+    if (op.variante == "dynvec") return executar<DynVecStore>(op, g, tr, mem_grafo);
+    if (op.variante == "bplus")  return executar<BPlusStore> (op, g, tr, mem_grafo);
     cerr << "Variante desconhecida: " << op.variante << "\n";
     return 1;
 }

@@ -3,8 +3,14 @@
 Projeto final da Unidade III de EDB2 (IMD0039, UFRN). Mantemos a fila de prioridade fixa
 (`std::priority_queue`, heap binário com lazy deletion) e comparamos estruturas de dados para
 armazenar os pesos dependentes do tempo das arestas: vetor indexado (`array`), tabela hash
-(`hash`), `std::map` (rubro-negra), vetor ordenado com busca binária (`vec`) e uma árvore B+
-implementada à mão (`bplus`).
+(`hash`), `std::map` (rubro-negra), vetor ordenado com busca binária (`vec`), vetor dinâmico
+por aresta (`dynvec`) e uma árvore B+ implementada à mão (`bplus`).
+
+**Pergunta central:** sob quais condições a B+ compete com as alternativas? O experimento testa
+três hipóteses: (H1) com K variável por aresta, `dynvec` supera `vec` em memória porque
+não pré-aloca o máximo; (H2) em ingestão incremental e fora de ordem, `bplus` supera `dynvec`
+em construção; (H3) em consulta, `vec`/`dynvec` superam `bplus` quando K é pequeno e fixo
+(localidade de cache).
 
 ## Dados
 
@@ -18,7 +24,7 @@ escala. Os defaults de `--passo` (30.000) e `--horizonte` (8.640.000) seguem ess
 
 ## Como compilar
 
-    make dijkstra_td          # compila com suporte a todas as 5 variantes (padrão para experimentos)
+    make dijkstra_td          # compila com suporte a todas as 6 variantes (padrão para experimentos)
     make dijkstra_base        # baseline estático
     make test_bplus           # teste isolado da B+ contra std::map
 
@@ -52,8 +58,17 @@ As opções completas estão no topo de `src/dijkstra_td.cpp`. As principais:
 | `--verificar` | off | Confere Dijkstra contra Bellman-Ford (apenas grafos pequenos) |
 | `--resumo ARQ` | — | Acrescenta linha de resumo com mediana e IQR (Q25/Q75) em CSV |
 
-O modo `--ordem aleatorio` simula ingestão incremental sem pré-alocação por aresta — cenário
-onde a B+ se diferencia das estruturas baseadas em bloco contíguo por aresta.
+O modo `--ordem aleatorio` simula ingestão incremental sem pré-alocação por aresta.
+O modo `--k-variavel` sorteia um K diferente por aresta (entre K/4 e K), habilitando o
+cenário justo para `dynvec` e `bplus` (que crescem sob demanda) vs `map`.
+
+**Correção:** todos os resultados usam checksums idênticos entre variantes e confirmados contra
+Bellman-Ford em grafos pequenos (`--verificar`). Os números reportados são mediana + IQR de
+100 origens com 1 warmup descartado.
+
+A query da B+ é uma **busca pelo predecessor** (última leitura com t' ≤ t), não um range scan
+genérico — as folhas encadeadas servem apenas para buscar o sucessor quando o predecessor está
+na borda direita da folha de chegada.
 
 ## Verificação
 
@@ -69,10 +84,10 @@ do `dijkstra_base`.
 ```
 src/
   dijkstra_base.cpp   baseline estático (Dijkstra com pesos fixos)
-  dijkstra_td.cpp     Dijkstra TD + todas as variantes (array, hash, map, vec, bplus)
-  traffic_types.hpp   tipos compartilhados: Reading, Traffic, interp
+  dijkstra_td.cpp     Dijkstra TD + variantes (array, hash, map, vec, dynvec, bplus)
+  traffic_types.hpp   tipos compartilhados: Reading, Traffic (K variável), interp
   bplus_store.hpp     árvore B+ implementada à mão (folhas encadeadas, ORDER configurável)
-  test_bplus.cpp      teste isolado da B+ contra std::map
+  test_bplus.cpp      teste isolado da B+ (chaves repetidas, ORDER 4/8/64)
 scripts/
   run_all.sh          varredura completa; gera resultados/resumo.csv
   gerar_grafo_teste.py  grafo sintético para testes rápidos

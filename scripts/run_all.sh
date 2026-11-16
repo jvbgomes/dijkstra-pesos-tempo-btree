@@ -90,6 +90,24 @@ for frac in $FRACS; do
       run resultados/map_f${frac}_p${passo}_reg_aleatorio.csv \
         "$G" map --origens $N --frac $frac --passo $passo --ordem aleatorio
     fi
+
+    # Cenario K variavel: concorrente justo entre dynvec, map e bplus.
+    # vec nao suporta (K pre-alocado); array e hash idem.
+    echo "--- frac=$frac passo=$passo k-variavel tempo ---"
+    for v in map dynvec bplus; do
+      run resultados/${v}_f${frac}_p${passo}_kvariavel_tempo.csv \
+        "$G" $v --origens $N --frac $frac --passo $passo --k-variavel
+    done
+
+    echo "--- frac=$frac passo=$passo k-variavel aleatorio ---"
+    for v in dynvec bplus; do
+      run resultados/${v}_f${frac}_p${passo}_kvariavel_aleatorio.csv \
+        "$G" $v --origens $N --frac $frac --passo $passo --k-variavel --ordem aleatorio
+    done
+    if ! { [ "$frac" = "0.50" ] && [ "$passo" = "6000" ]; }; then
+      run resultados/map_f${frac}_p${passo}_kvariavel_aleatorio.csv \
+        "$G" map --origens $N --frac $frac --passo $passo --k-variavel --ordem aleatorio
+    fi
   done
 done
 
