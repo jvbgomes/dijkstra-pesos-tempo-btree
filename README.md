@@ -2,8 +2,9 @@
 
 Projeto final da Unidade III de EDB2 (IMD0039, UFRN). Mantemos a fila de prioridade fixa
 (`std::priority_queue`, heap binário com lazy deletion) e comparamos estruturas de dados para
-armazenar os pesos dependentes do tempo das arestas: vetor indexado, tabela hash, `std::map`
-(rubro-negra), vetor ordenado com busca binária e uma árvore B+ (a ser implementada).
+armazenar os pesos dependentes do tempo das arestas: vetor indexado (`array`), tabela hash
+(`hash`), `std::map` (rubro-negra), vetor ordenado com busca binária (`vec`) e uma árvore B+
+implementada à mão (`bplus`).
 
 ## Dados
 
@@ -11,21 +12,71 @@ O grafo de Nova York do 9th DIMACS Implementation Challenge (tempo de viagem, 26
 733.846 arcos) já está incluído em `data/USA-road-t.NY.gr`. Os dados são de domínio público.
 Fonte original: https://www.diag.uniroma1.it/challenge9/download.shtml
 
-## Como compilar e rodar
+**Unidade dos pesos:** centésimos de segundo (cs). Os valores no arquivo `-t` representam
+tempo de viagem em cs; 24 h = 8.640.000 cs. Os defaults de `--passo` (30.000 cs = 5 min) e
+`--horizonte` (8.640.000 cs = 24 h) refletem isso.
 
-    make
+## Como compilar
+
+    make dijkstra_td_bplus   # compila com suporte a todas as 5 variantes (padrão para experimentos)
+    make dijkstra_base        # baseline estático
+    make test_bplus           # teste isolado da B+ contra std::map
+
+## Como rodar
+
+    # Grafo de teste gerado artificialmente (rápido)
+    python3 scripts/gerar_grafo_teste.py 50 50 data/teste.gr
+    ./dijkstra_td data/teste.gr bplus --origens 20 --frac 0.5 --passo 100 --horizonte 2400
+
+    # Baseline estático
     ./dijkstra_base data/USA-road-t.NY.gr 20 42 > resultados/base.csv
+
+    # Variante individual
     ./dijkstra_td data/USA-road-t.NY.gr vec --origens 100 > resultados/vec.csv
+
+    # Varredura completa (gera resultados/resumo.csv com mediana e IQR)
     ./scripts/run_all.sh data/USA-road-t.NY.gr 100
 
-As opções do `dijkstra_td` estão descritas no topo de `src/dijkstra_td.cpp`. Para testar sem o
-grafo real: `python3 scripts/gerar_grafo_teste.py 300 300 data/teste.gr`.
+## Opções do `dijkstra_td`
+
+As opções completas estão no topo de `src/dijkstra_td.cpp`. As principais:
+
+| Opção | Padrão | Descrição |
+|---|---|---|
+| `--frac F` | 0.10 | Fração das arestas com histórico de tráfego |
+| `--passo P` | 30000 | Intervalo entre leituras em cs (30000 cs = 5 min) |
+| `--horizonte H` | 8640000 | Duração total do histórico em cs (8640000 cs = 24 h) |
+| `--irregular` | off | Horários com variação aleatória (como GPS real) |
+| `--ordem O` | tempo | Ordem de ingestão: `tempo` (slot-major), `chave` (edge-major), `aleatorio` |
+| `--origens N` | 20 | Número de origens sorteadas |
+| `--verificar` | off | Confere Dijkstra contra Bellman-Ford (apenas grafos pequenos) |
+| `--resumo ARQ` | — | Acrescenta linha de resumo com mediana e IQR (Q25/Q75) em CSV |
+
+O modo `--ordem aleatorio` simula ingestão incremental sem pré-alocação por aresta — cenário
+onde a B+ se diferencia das estruturas baseadas em bloco contíguo por aresta.
 
 ## Verificação
 
-`--verificar` compara o Dijkstra com um Bellman-Ford em grafos pequenos. Todas as variantes
+`--verificar` compara o Dijkstra com Bellman-Ford em grafos pequenos. Todas as variantes
 devem produzir o mesmo checksum para as mesmas origens, e `--frac 0` deve reproduzir o checksum
 do `dijkstra_base`.
+
+    ./dijkstra_td data/teste.gr bplus --origens 10 --frac 0.5 --passo 100 --horizonte 2400 --verificar
+    ./test_bplus   # teste unitário da B+ contra std::map com inserções aleatórias
+
+## Estrutura dos arquivos
+
+```
+src/
+  dijkstra_base.cpp   baseline estático (Dijkstra com pesos fixos)
+  dijkstra_td.cpp     Dijkstra TD + todas as variantes (array, hash, map, vec, bplus)
+  traffic_types.hpp   tipos compartilhados: Reading, Traffic, interp
+  bplus_store.hpp     árvore B+ implementada à mão (folhas encadeadas, ORDER configurável)
+  test_bplus.cpp      teste isolado da B+ contra std::map
+scripts/
+  run_all.sh          varredura completa; gera resultados/resumo.csv
+  gerar_grafo_teste.py  grafo sintético para testes rápidos
+```
 
 ## Autores
 
