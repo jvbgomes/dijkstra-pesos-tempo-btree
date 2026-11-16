@@ -9,9 +9,7 @@ G=${1:?"informe o grafo .gr"}; N=${2:-100}
 set -e
 mkdir -p resultados
 
-# Recompila com suporte a B+ (USE_BPLUS) e sem (para array/hash/map/vec).
-# Usamos o mesmo binario; a flag -DUSE_BPLUS so habilita a variante bplus.
-g++ -O3 -std=c++17 -DUSE_BPLUS -o dijkstra_td src/dijkstra_td.cpp
+g++ -O3 -std=c++17 -o dijkstra_td src/dijkstra_td.cpp
 
 rm -f resultados/resumo.csv
 

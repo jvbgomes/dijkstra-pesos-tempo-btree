@@ -5,7 +5,6 @@
 //
 // Compilar:
 //   g++ -O3 -std=c++17 -o dijkstra_td dijkstra_td.cpp
-//   (com a arvore B+ de voces:  g++ -O3 -std=c++17 -DUSE_BPLUS -o dijkstra_td dijkstra_td.cpp)
 //
 // Uso:
 //   ./dijkstra_td <grafo.gr> <variante> [opcoes] > resultados_<variante>.csv
@@ -15,7 +14,7 @@
 //   hash   unordered_map (aresta, slot);       so funciona com leituras em grade regular
 //   map    std::map (arvore rubro-negra), chave (aresta, horario); aceita horarios irregulares
 //   vec    vetor ordenado por aresta + busca binaria;              aceita horarios irregulares
-//   bplus  a nossa arvore B+ (precisa compilar com -DUSE_BPLUS)
+//   bplus  arvore B+ (ver bplus_store.hpp)
 //
 // Opcoes (valores padrao entre parenteses):
 //   --origens N      numero de origens sorteadas (20)
@@ -119,7 +118,6 @@ Traffic gerar_trafego(const Graph& g, double frac, int step, int horizon, bool i
     tr.step = step;
     tr.horizon = (horizon / step) * step;
     tr.K = tr.horizon / step + 1;
-    tr.regular = !irregular;
     mt19937 rng(seed);
     uniform_real_distribution<double> U(0.0, 1.0);
     int m = (int)g.to.size();
@@ -128,7 +126,6 @@ Traffic gerar_trafego(const Graph& g, double frac, int step, int horizon, bool i
         if (U(rng) < frac) tr.td_id[e] = tr.n_td++;
     tr.flat.resize((size_t)tr.n_td * tr.K);
 
-    // base[id] = peso base da aresta com aquele id
     vector<int> times(tr.K);
     auto sq = [](double x) { return x * x; };
     for (int e = 0; e < m; ++e) {
@@ -229,156 +226,7 @@ struct VecStore {
     }
 };
 
-#ifdef USE_BPLUS
-// 5) Arvore B+ implementada a mao: folhas encadeadas, chave (id, horario).
-//    Aceita insercao fora de ordem e horarios irregulares.
-//    Ordem do no configuravel via BPLUS_ORDER (padrao 64).
-
-#ifndef BPLUS_ORDER
-#define BPLUS_ORDER 64
-#endif
-
-struct BKey {
-    int id, t;
-    bool operator<(const BKey& o) const { return id < o.id || (id == o.id && t < o.t); }
-    bool operator==(const BKey& o) const { return id == o.id && t == o.t; }
-};
-
-struct BPlusStore {
-    static constexpr int ORDER = BPLUS_ORDER;
-
-    struct Leaf {
-        int n = 0;
-        BKey keys[ORDER];
-        int  vals[ORDER];
-        Leaf* prev = nullptr;
-        Leaf* next = nullptr;
-    };
-
-    struct Inner {
-        int n = 0;
-        BKey  keys[ORDER];
-        void* child[ORDER + 1] = {};
-        bool  child_is_leaf[ORDER + 1] = {};
-    };
-
-    void* root = nullptr;
-    bool  root_is_leaf = true;
-    Leaf* head = nullptr;
-
-    BPlusStore() {
-        Leaf* l = new Leaf();
-        root = l; root_is_leaf = true; head = l;
-    }
-    explicit BPlusStore(const Traffic&) : BPlusStore() {}
-    ~BPlusStore() { destroy(root, root_is_leaf); }
-
-    void destroy(void* node, bool is_leaf) {
-        if (!node) return;
-        if (is_leaf) { delete static_cast<Leaf*>(node); return; }
-        Inner* in = static_cast<Inner*>(node);
-        for (int i = 0; i <= in->n; ++i) destroy(in->child[i], in->child_is_leaf[i]);
-        delete in;
-    }
-
-    struct SplitResult { BKey key; void* right; bool right_is_leaf; };
-
-    void insert(int id, int /*k*/, const Reading& r) {
-        BKey k{id, r.t};
-        SplitResult sr{};
-        if (!insert_node(root, root_is_leaf, k, r.w, sr)) return;
-        Inner* nr = new Inner();
-        nr->n = 1; nr->keys[0] = sr.key;
-        nr->child[0] = root; nr->child_is_leaf[0] = root_is_leaf;
-        nr->child[1] = sr.right; nr->child_is_leaf[1] = sr.right_is_leaf;
-        root = nr; root_is_leaf = false;
-    }
-
-    bool insert_node(void* node, bool is_leaf, const BKey& k, int val, SplitResult& sr) {
-        if (is_leaf) {
-            Leaf* l = static_cast<Leaf*>(node);
-            int pos = (int)(lower_bound(l->keys, l->keys + l->n, k) - l->keys);
-            if (pos < l->n && l->keys[pos] == k) { l->vals[pos] = val; return false; }
-            memmove(l->keys + pos + 1, l->keys + pos, (l->n - pos) * sizeof(BKey));
-            memmove(l->vals + pos + 1, l->vals + pos, (l->n - pos) * sizeof(int));
-            l->keys[pos] = k; l->vals[pos] = val; l->n++;
-            if (l->n < ORDER) return false;
-            Leaf* right = new Leaf();
-            int mid = l->n / 2;
-            right->n = l->n - mid;
-            memcpy(right->keys, l->keys + mid, right->n * sizeof(BKey));
-            memcpy(right->vals, l->vals + mid, right->n * sizeof(int));
-            l->n = mid;
-            right->next = l->next; right->prev = l;
-            if (l->next) l->next->prev = right;
-            l->next = right;
-            sr = {right->keys[0], right, true};
-            return true;
-        }
-        Inner* in = static_cast<Inner*>(node);
-        int ci = (int)(lower_bound(in->keys, in->keys + in->n, k) - in->keys);
-        SplitResult csr{};
-        if (!insert_node(in->child[ci], in->child_is_leaf[ci], k, val, csr)) return false;
-        memmove(in->keys + ci + 1, in->keys + ci, (in->n - ci) * sizeof(BKey));
-        memmove(in->child + ci + 2, in->child + ci + 1, (in->n - ci) * sizeof(void*));
-        memmove(in->child_is_leaf + ci + 2, in->child_is_leaf + ci + 1, (in->n - ci) * sizeof(bool));
-        in->keys[ci] = csr.key;
-        in->child[ci + 1] = csr.right;
-        in->child_is_leaf[ci + 1] = csr.right_is_leaf;
-        in->n++;
-        if (in->n < ORDER) return false;
-        Inner* right = new Inner();
-        int mid = in->n / 2;
-        BKey promoted = in->keys[mid];
-        right->n = in->n - mid - 1;
-        memcpy(right->keys, in->keys + mid + 1, right->n * sizeof(BKey));
-        memcpy(right->child, in->child + mid + 1, (right->n + 1) * sizeof(void*));
-        memcpy(right->child_is_leaf, in->child_is_leaf + mid + 1, (right->n + 1) * sizeof(bool));
-        in->n = mid;
-        sr = {promoted, right, false};
-        return true;
-    }
-
-    int query(int id, int t) const {
-        BKey lo{id, INT_MIN};
-        const Leaf* l = find_leaf(lo);
-        if (!l) return 0;
-        Reading prev_buf{}, next_buf{};
-        const Reading* prev_r = nullptr;
-        const Reading* next_r = nullptr;
-        for (const Leaf* cur = l; cur; cur = cur->next) {
-            bool done = false;
-            for (int i = 0; i < cur->n; ++i) {
-                if (cur->keys[i].id != id) {
-                    if (cur->keys[i].id > id) { done = true; break; }
-                    continue;
-                }
-                if (cur->keys[i].t <= t) {
-                    prev_buf = {cur->keys[i].t, cur->vals[i]}; prev_r = &prev_buf;
-                } else {
-                    next_buf = {cur->keys[i].t, cur->vals[i]}; next_r = &next_buf;
-                    done = true; break;
-                }
-            }
-            if (done) break;
-        }
-        if (!prev_r && !next_r) return 0;
-        if (!prev_r) return next_r->w;
-        if (!next_r) return prev_r->w;
-        return interp(*prev_r, *next_r, t);
-    }
-
-    const Leaf* find_leaf(const BKey& k) const {
-        if (root_is_leaf) return static_cast<const Leaf*>(root);
-        const Inner* in = static_cast<const Inner*>(root);
-        while (true) {
-            int ci = (int)(lower_bound(in->keys, in->keys + in->n, k) - in->keys);
-            if (in->child_is_leaf[ci]) return static_cast<const Leaf*>(in->child[ci]);
-            in = static_cast<const Inner*>(in->child[ci]);
-        }
-    }
-};
-#endif
+#include "bplus_store.hpp"
 
 // ---------------------------------------------------------------- Dijkstra dependente do tempo
 template <class Store>
@@ -587,14 +435,7 @@ int main(int argc, char** argv) {
     if (op.variante == "hash") return executar<HashStore>(op, g, tr, mem_grafo);
     if (op.variante == "map") return executar<MapStore>(op, g, tr, mem_grafo);
     if (op.variante == "vec") return executar<VecStore>(op, g, tr, mem_grafo);
-#ifdef USE_BPLUS
     if (op.variante == "bplus") return executar<BPlusStore>(op, g, tr, mem_grafo);
-#else
-    if (op.variante == "bplus") {
-        cerr << "Compile com -DUSE_BPLUS para usar a variante bplus.\n";
-        return 1;
-    }
-#endif
     cerr << "Variante desconhecida: " << op.variante << "\n";
     return 1;
 }

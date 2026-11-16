@@ -1,9 +1,8 @@
 // test_bplus.cpp
 // Testa BPlusStore contra std::map com insercoes aleatorias.
-// Compilar: g++ -O2 -std=c++17 -DUSE_BPLUS -o test_bplus test_bplus.cpp
+// Compilar: g++ -O2 -std=c++17 -o test_bplus test_bplus.cpp
 // Rodar:    ./test_bplus
 
-#include <cassert>
 #include <cstdio>
 #include <map>
 #include <random>

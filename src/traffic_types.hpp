@@ -8,7 +8,6 @@ struct Reading { int t; int w; };
 
 struct Traffic {
     int step = 0, horizon = 0, K = 0;
-    bool regular = true;
     int n_td = 0;
     std::vector<int> td_id;
     std::vector<Reading> flat;

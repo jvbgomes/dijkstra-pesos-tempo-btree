@@ -1,7 +1,7 @@
 // bplus_store.hpp
-// Usado apenas por src/test_bplus.cpp.
-// A implementacao principal de BPlusStore esta em dijkstra_td.cpp (bloco #ifdef USE_BPLUS).
-// Este header replica o mesmo codigo para permitir teste isolado sem compilar dijkstra_td.cpp.
+// Arvore B+ para armazenar leituras de trafego (aresta, horario) -> peso.
+// Folhas encadeadas em lista ligada, chave composta (id, t), sem std::map nem libs externas.
+// Incluido por dijkstra_td.cpp e por test_bplus.cpp.
 
 #pragma once
 #include <algorithm>
@@ -24,9 +24,8 @@ struct BPlusStore {
 
     struct Leaf {
         int n = 0;
-        BKey keys[ORDER];
-        int  vals[ORDER];
-        Leaf* prev = nullptr;
+        BKey  keys[ORDER];
+        int   vals[ORDER];
         Leaf* next = nullptr;
     };
 
@@ -39,11 +38,10 @@ struct BPlusStore {
 
     void* root = nullptr;
     bool  root_is_leaf = true;
-    Leaf* head = nullptr;
 
     BPlusStore() {
         Leaf* l = new Leaf();
-        root = l; root_is_leaf = true; head = l;
+        root = l; root_is_leaf = true;
     }
     explicit BPlusStore(const Traffic&) : BPlusStore() {}
     ~BPlusStore() { destroy(root, root_is_leaf); }
@@ -84,8 +82,7 @@ struct BPlusStore {
             std::memcpy(right->keys, l->keys + mid, right->n * sizeof(BKey));
             std::memcpy(right->vals, l->vals + mid, right->n * sizeof(int));
             l->n = mid;
-            right->next = l->next; right->prev = l;
-            if (l->next) l->next->prev = right;
+            right->next = l->next;
             l->next = right;
             sr = {right->keys[0], right, true};
             return true;
