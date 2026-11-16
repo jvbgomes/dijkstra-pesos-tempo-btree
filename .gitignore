@@ -1,5 +1,16 @@
 # binarios
 dijkstra_base
 dijkstra_td
+test_bplus
 *.o
-!data/.gitkeep
+
+# grafos gerados para teste local
+data/teste.gr
+
+# resultados intermediarios (regenerados pelo run_all.sh)
+resultados/*.csv
+resultados/graficos/
+
+# cache python
+__pycache__/
+*.pyc
