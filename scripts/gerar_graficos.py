@@ -225,7 +225,7 @@ if not d1.empty:
     fig, ax = plt.subplots(figsize=(7, 4))
     _bar_iqr(ax, d1, "variante", variantes, PALETA)
     ax.set_xlabel("Estrutura de armazenamento")
-    ax.set_ylabel("Tempo de consulta -- mediana (ms)")
+    ax.set_ylabel("Tempo do Dijkstra (ms), mediana")
     ax.set_title(
         f"Tempo do Dijkstra TD por variante\n"
         f"NY, frac=0,20, passo=5 min ({CONV_NOTA}), grade regular\n"
@@ -244,7 +244,7 @@ if not d2.empty:
     fig, ax = plt.subplots(figsize=(7, 4))
     _line_iqr(ax, d2, "frac", "variante", variantes, PALETA)
     ax.set_xlabel("Fração de arestas com histórico de tráfego")
-    ax.set_ylabel("Tempo de consulta -- mediana (ms)")
+    ax.set_ylabel("Tempo do Dijkstra (ms), mediana")
     ax.set_title(
         f"Escalabilidade com volume de histórico\n"
         f"NY, passo=5 min ({CONV_NOTA}), grade regular\n"
@@ -271,7 +271,7 @@ if not d3.empty:
     h = _bar_hue_iqr(ax, d3, "variante", variantes, "horario", hue_order, PAL_HORARIO)
     ax.legend(handles=list(h.values()), labels=list(h.keys()), title="Horário")
     ax.set_xlabel("Estrutura")
-    ax.set_ylabel("Tempo de consulta -- mediana (ms)")
+    ax.set_ylabel("Tempo do Dijkstra (ms), mediana")
     ax.set_title(
         f"Grade regular vs horários irregulares\n"
         f"NY, frac=0,20, passo=5 min ({CONV_NOTA})\n"
@@ -298,7 +298,7 @@ if not d4.empty and d4["ordem"].nunique() > 1:
                        "construcao_s", PAL_ORDEM)
     ax.set_yscale("log")
     ax.set_xlabel("Estrutura")
-    ax.set_ylabel("Tempo de construção (s) -- escala log")
+    ax.set_ylabel("Tempo de construção (s), escala log")
     ax.set_title(
         f"Custo de ingestão por ordem de chegada\n"
         f"NY, frac=0,20, passo=5 min ({CONV_NOTA})"
@@ -322,7 +322,7 @@ if not d5.empty and d5["passo"].nunique() > 1:
     passos_disp = sorted(d5["passo"].unique(), reverse=True)
     pts_str = " e ".join(str(8640000 // p + 1) for p in passos_disp)
     ax.set_xlabel("Leituras por aresta (maior = histórico mais denso)")
-    ax.set_ylabel("Tempo de consulta -- mediana (ms)")
+    ax.set_ylabel("Tempo do Dijkstra (ms), mediana")
     ax.set_title(
         f"Impacto da densidade de leituras por aresta\n"
         f"NY, frac=0,20, grade regular  "
@@ -361,11 +361,11 @@ if any(not d.empty for d in fig6_datasets.values()):
         leituras = 8640000 // passo + 1
         ax.set_title(f"passo={passo} ({leituras} leit./aresta)")
         ax.set_xlabel("Estrutura")
-        ax.set_ylabel("Tempo de consulta -- mediana (ms)")
+        ax.set_ylabel("Tempo do Dijkstra (ms), mediana")
     fig.suptitle(
         "Irregular, 50% das arestas com histórico\n"
         "NY, barra=mediana, traço=IQR  "
-        "[map nao disponivel para frac=0,50 irregular; ver falhas.log]",
+        "[map não disponível para frac=0,50 irregular; ver falhas.log]",
         fontsize=9
     )
     fig.tight_layout()
@@ -382,7 +382,7 @@ if not d7.empty:
     fig, ax = plt.subplots(figsize=(7, 4))
     _line_iqr(ax, d7, "frac", "variante", variantes, PALETA)
     ax.set_xlabel("Fração de arestas com histórico")
-    ax.set_ylabel("Tempo de consulta -- mediana (ms)")
+    ax.set_ylabel("Tempo do Dijkstra (ms), mediana")
     ax.set_title(
         f"K variável por aresta: consulta\n"
         f"NY, passo=5 min ({CONV_NOTA}), ordem=tempo\n"
@@ -409,7 +409,7 @@ if not d8.empty and d8["ordem"].nunique() > 1:
                        "construcao_s", PAL_ORDEM)
     ax.set_yscale("log")
     ax.set_xlabel("Estrutura")
-    ax.set_ylabel("Tempo de construção (s) -- escala log")
+    ax.set_ylabel("Tempo de construção (s), escala log")
     ax.set_title(
         f"K variável: custo de ingestão por ordem\n"
         f"NY, frac=0,20, passo=5 min ({CONV_NOTA})"
@@ -459,7 +459,7 @@ if not dA_raw.empty:
     fig, ax = plt.subplots(figsize=(7, 4))
     _line_iqr(ax, dA, "frac", "variante", ORDEM_ART, PALETA_ART)
     ax.set_xlabel("Fração de arestas com histórico de tráfego")
-    ax.set_ylabel("Tempo de consulta -- mediana (ms)")
+    ax.set_ylabel("Tempo do Dijkstra (ms), mediana")
     ax.set_title(
         f"Consulta em função do volume de histórico (K fixo)\n"
         f"NY, passo=5 min ({CONV_NOTA}), grade regular, ordem=tempo\n"
@@ -497,7 +497,7 @@ if not dB_q.empty:
     # painel (a): consulta com IQR
     _line_iqr(axes[0], dB_q_r, "frac", "variante", ORDEM_ART, PALETA_ART)
     axes[0].set_xlabel("Fração de arestas com histórico")
-    axes[0].set_ylabel("Tempo de consulta -- mediana (ms)")
+    axes[0].set_ylabel("Tempo do Dijkstra (ms), mediana")
     axes[0].set_title("(a) Consulta (ordem=tempo)\nlinha=mediana, faixa=IQR")
 
     # painel (b): ingestao em segundos, escala log
@@ -509,7 +509,7 @@ if not dB_q.empty:
                      color=PALETA_ART.get(hue, "#aaa"), label=hue)
     axes[1].set_yscale("log")
     axes[1].set_xlabel("Fração de arestas com histórico")
-    axes[1].set_ylabel("Tempo de construção (s) -- log")
+    axes[1].set_ylabel("Tempo de construção (s), log")
     axes[1].set_title("(b) Ingestão (ordem=aleatório)")
 
     # painel (c): memoria

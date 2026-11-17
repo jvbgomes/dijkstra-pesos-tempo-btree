@@ -43,7 +43,8 @@ escala. Os defaults de `--passo` (30.000) e `--horizonte` (8.640.000) seguem ess
     # Variante individual
     ./dijkstra_td data/USA-road-t.NY.gr vec --origens 100 > resultados/vec.csv
 
-    # Varredura completa (gera resultados/resumo.csv com mediana e IQR)
+    # Varredura completa (ATENÇÃO: apaga e recria resultados/resumo.csv)
+    # Os resultados versionados foram gerados por versões anteriores dos scripts.
     ./scripts/run_all.sh data/USA-road-t.NY.gr 100
 
 ## Opções do `dijkstra_td`
@@ -142,7 +143,7 @@ Os resultados da varredura ficam em `resultados/resumo.csv`. Colunas:
 | `origens` | número de origens usadas (100 no experimento principal) |
 | `k_variavel` | 0 = K uniforme por aresta, 1 = K variável por aresta |
 
-Combinações não executadas (OOM ou skip preventivo) estão em `resultados/falhas.log`.
+Combinações não executadas (SIGSEGV ou estimativa de memória alta) estão em `resultados/falhas.log`.
 
 **Regenerar os gráficos:**
 

@@ -1,14 +1,25 @@
 # Combinacoes nao executadas no experimento EDB2 Dijkstra TD
-# Gerado em 2026-11-16
+# Gerado em 2026-11-16, atualizado em 2026-11-16
 # Formato: NAO EXECUTADO: <descricao> (<motivo>)
 #
 # Tambem registra correcoes aplicadas a resumo.csv.
 
-NAO EXECUTADO: map irregular frac=0.50 passo=30000 ordem=tempo (pulado em run_all.sh: map pula frac=0.50 em modo irregular, qualquer passo, estimativa acima de 6 GB)
-NAO EXECUTADO: map irregular frac=0.50 passo=30000 ordem=chave (mesmo motivo acima)
-NAO EXECUTADO: map irregular frac=0.50 passo=6000 ordem=tempo (mesmo motivo acima)
+# -- map irregular frac=0.50 (qualquer passo) --
+# A execucao de map irregular frac=0.50 passo=30000 ordem=tempo terminou com
+# codigo de saida 139 (SIGSEGV). A causa nao foi diagnosticada. O arquivo
+# resultados/map_f0.50_p30000_irr_tempo.csv existe mas esta vazio.
+# As demais combinacoes map irregular frac=0.50 nao foram tentadas apos a falha.
+
+NAO EXECUTADO: map irregular frac=0.50 passo=30000 ordem=tempo (execucao anterior terminou com codigo 139 / SIGSEGV, causa nao diagnosticada; arquivo map_f0.50_p30000_irr_tempo.csv existe e esta vazio)
+NAO EXECUTADO: map irregular frac=0.50 passo=30000 ordem=chave (nao tentado apos SIGSEGV na ordem=tempo do mesmo cenario)
+NAO EXECUTADO: map irregular frac=0.50 passo=6000 ordem=tempo (nao tentado apos SIGSEGV no passo=30000 do mesmo cenario)
 NAO EXECUTADO: map irregular frac=0.50 passo=6000 ordem=chave (mesmo motivo acima)
-NAO EXECUTADO: map regular frac=0.50 passo=6000 ordem=tempo (estimativa de ~36 GB para K=1441 e frac=0.50; pulado explicitamente em run_all.sh com mensagem SKIP)
+
+# -- map frac=0.50 passo=6000 (modo regular e k_variavel) --
+# Nao executados por estimativa de memoria alta (~36 GB para K=1441 e frac=0.50).
+# A estimativa nao foi confirmada experimentalmente.
+
+NAO EXECUTADO: map regular frac=0.50 passo=6000 ordem=tempo (estimativa de ~36 GB para K=1441 e frac=0.50, sem confirmacao experimental; pulado em run_all.sh com mensagem SKIP)
 NAO EXECUTADO: map regular frac=0.50 passo=6000 ordem=chave (mesmo motivo acima)
 NAO EXECUTADO: map regular frac=0.50 passo=6000 ordem=aleatorio (mesmo motivo acima)
 NAO EXECUTADO: map k_variavel frac=0.50 passo=6000 ordem=aleatorio (mesmo motivo acima; condicao de skip aplicada em run_all.sh e run_kvariavel.sh)
