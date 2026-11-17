@@ -6,11 +6,14 @@ armazenar os pesos dependentes do tempo das arestas: vetor indexado (`array`), t
 (`hash`), `std::map` (rubro-negra), vetor ordenado com busca binária (`vec`), vetor dinâmico
 por aresta (`dynvec`) e uma árvore B+ implementada à mão (`bplus`).
 
-**Pergunta central:** sob quais condições a B+ compete com as alternativas? O experimento testa
-três hipóteses: (H1) com K variável por aresta, `dynvec` supera `vec` em memória porque
-não pré-aloca o máximo; (H2) em ingestão incremental e fora de ordem, `bplus` supera `dynvec`
-em construção; (H3) em consulta, `vec`/`dynvec` superam `bplus` quando K é pequeno e fixo
-(localidade de cache).
+**Pergunta central:** sob quais condições a B+ compete com as alternativas? O experimento
+levantou cinco hipóteses: (H1) com K fixo, `bplus` usa cerca de 40% da memória do `map` e
+tem consulta mais rápida (observada); (H2) `dynvec` vence `bplus` em consulta para K até
+1.441 leituras por aresta (observada); (H3) `bplus` se aproxima de `dynvec` na ingestão
+conforme K cresce, a testar com maior faixa de K; (H4) a ordem de ingestão degrada a consulta
+do `map` mais do que a da `bplus`, provavelmente por localidade de cache, mecanismo não medido
+(observada); (H5) horário irregular não altera o tempo de consulta em nenhuma variante
+(observada).
 
 ## Dados
 
@@ -67,8 +70,45 @@ Bellman-Ford em grafos pequenos (`--verificar`). Os números reportados são med
 100 origens com 1 warmup descartado.
 
 A query da B+ é uma **busca pelo predecessor** (última leitura com t' ≤ t), não um range scan
-genérico — as folhas encadeadas servem apenas para buscar o sucessor quando o predecessor está
+genérico. As folhas encadeadas servem apenas para buscar o sucessor quando o predecessor está
 na borda direita da folha de chegada.
+
+## Modelo de tráfego sintético
+
+O tráfego é puramente sintético, gerado pela função `gerar_trafego` em `src/dijkstra_td.cpp`.
+Não há calibração com dados reais.
+
+**Picos de congestionamento:** dois picos gaussianos centrados em 8/24 e 18/24 do horizonte
+(8 h e 18 h por convenção). Fator de congestionamento por aresta:
+
+    f = 1 + A * (exp(-((x - 8/24) / 0,05)^2) + exp(-((x - 18/24) / 0,05)^2))
+
+onde x = t / horizonte e A é sorteado em [0,5; 3,0] por aresta (uniform).
+
+**Ruído multiplicativo:** fator ruido = 1 + 0,10 * (U - 0,5), ou seja, perturbação de ±5%
+em torno do valor determinístico.
+
+**Peso resultante:** `w = max(1, round(w_base * f * ruido))`.
+
+**Garantia FIFO:** `w_k = max(w_k_raw, w_{k-1} - (t_k - t_{k-1}))`. Esse clamp garante que
+a leitura k nunca cai mais do que o intervalo de tempo em relação à anterior, preservando a
+propriedade FIFO exigida pelo Dijkstra TD.
+
+**Modo irregular (`--irregular`):** jitter de ±25% do passo aplicado aos instantes internos,
+ou seja, `j = round((U - 0,5) * 0,5 * passo)`. Os extremos (k=0 e k=K-1) são mantidos fixos.
+
+**Modo K variável (`--k-variavel`):** K por aresta sorteado em `[max(2, K/4), K]`.
+
+**Interpolação:** `interp(a, b, t) = a.w + floordiv((b.w - a.w) * (t - a.t), b.t - a.t)`,
+com divisão inteira de piso (floor division, não truncamento), o que preserva a propriedade
+FIFO na resposta da consulta.
+
+## Limitações
+
+O histórico de tráfego é sintético; os valores de peso não vêm de sensores reais. A escala
+de tempo é uma convenção do experimento (8.640.000 unidades = 24 h); o DIMACS não especifica
+unidade absoluta. O experimento usa um único grafo (Nova York) e foi executado numa única
+máquina. Latências absolutas não são comparáveis entre máquinas distintas.
 
 ## Verificação
 
@@ -78,6 +118,51 @@ do `dijkstra_base`.
 
     ./dijkstra_td data/teste.gr bplus --origens 10 --frac 0.5 --passo 100 --horizonte 2400 --verificar
     ./test_bplus   # teste unitário da B+ contra std::map com inserções aleatórias
+
+## Resultados e gráficos
+
+Os resultados da varredura ficam em `resultados/resumo.csv`. Colunas:
+
+| Coluna | Descrição |
+|--------|-----------|
+| `variante` | estrutura de armazenamento testada |
+| `frac` | fração das arestas com histórico |
+| `passo` | intervalo entre leituras (unidades do grafo) |
+| `irregular` | 0 = grade regular, 1 = horários com jitter |
+| `ordem` | ordem de ingestão: `tempo`, `chave` ou `aleatorio` |
+| `arestas_td` | total de arestas com histórico de tráfego |
+| `leituras` | total de leituras armazenadas (arestas_td * K médio) |
+| `construcao_ms` | tempo de ingestão completa (medição única, em ms) |
+| `memoria_mb` | RSS após ingestão (MB, inclui grafo e td_id) |
+| `mediana_ms` | mediana do tempo de Dijkstra TD sobre `origens` consultas |
+| `q25_ms` | 1º quartil do tempo de consulta (ms) |
+| `q75_ms` | 3º quartil do tempo de consulta (ms) |
+| `min_ms` | tempo mínimo de consulta (ms) |
+| `max_ms` | tempo máximo de consulta (ms) |
+| `origens` | número de origens usadas (100 no experimento principal) |
+| `k_variavel` | 0 = K uniforme por aresta, 1 = K variável por aresta |
+
+Combinações não executadas (OOM ou skip preventivo) estão em `resultados/falhas.log`.
+
+**Regenerar os gráficos:**
+
+    python3 scripts/gerar_graficos.py          # usa resultados/resumo.csv
+    python3 scripts/gerar_graficos.py outro.csv
+
+**Figuras principais** (usadas no artigo), em `resultados/graficos/`:
+
+| Figura | Conteúdo |
+|--------|----------|
+| `figA_consulta_kfixo` | consulta por volume de histórico, K fixo, vec/bplus/map |
+| `figB_kvariavel_composto` | 3 painéis K variável: consulta, ingestão e memória |
+| `figC_memoria_por_leitura` | bytes por leitura armazenada, K fixo |
+
+**Figuras complementares** (fig1 a fig9): mostram todas as variantes e
+configurações; ficam no repositório como suporte.
+
+**Verificar checksums entre variantes:**
+
+    python3 scripts/verificar_checksums.py     # salva resultados/verificacao_checksums.txt
 
 ## Estrutura dos arquivos
 
@@ -89,8 +174,16 @@ src/
   bplus_store.hpp     árvore B+ implementada à mão (folhas encadeadas, ORDER configurável)
   test_bplus.cpp      teste isolado da B+ (chaves repetidas, ORDER 4/8/64)
 scripts/
-  run_all.sh          varredura completa; gera resultados/resumo.csv
-  gerar_grafo_teste.py  grafo sintético para testes rápidos
+  run_all.sh              varredura completa; gera resultados/resumo.csv
+  run_kvariavel.sh        somente cenário K variável; acrescenta ao resumo.csv existente
+  gerar_graficos.py       gera os gráficos (fig1-fig9 e figA-figC) a partir do resumo.csv
+  verificar_checksums.py  confere checksums entre variantes nos CSVs por origem
+  gerar_grafo_teste.py    grafo sintético para testes rápidos
+resultados/
+  resumo.csv              tabela de resultados (versionada)
+  falhas.log              combinações não executadas e correções aplicadas
+  verificacao_checksums.txt  relatório de verificação de checksums (versionado)
+  graficos/               figuras em PDF e PNG
 ```
 
 ## Autores

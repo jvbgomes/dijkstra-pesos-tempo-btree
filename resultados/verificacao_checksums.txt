@@ -1,0 +1,10 @@
+Relatorio de verificacao de checksums
+Arquivos processados com dados: 130
+
+
+Resultado: 42 configuracoes OK (>= 2 variantes, sem divergencias)
+           0 configuracoes com apenas uma variante (nao verificadas)
+           0 pares origem/configuracao com divergencia
+
+Arquivos sem dados ou com erro (1):
+  map_f0.50_p30000_irr_tempo.csv: sem linhas de dados reconhecidas

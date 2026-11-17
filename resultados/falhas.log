@@ -1,0 +1,16 @@
+# Combinacoes nao executadas no experimento EDB2 Dijkstra TD
+# Gerado em 2026-11-16
+# Formato: NAO EXECUTADO: <descricao> (<motivo>)
+#
+# Tambem registra correcoes aplicadas a resumo.csv.
+
+NAO EXECUTADO: map irregular frac=0.50 passo=30000 ordem=tempo (pulado em run_all.sh: map pula frac=0.50 em modo irregular, qualquer passo, estimativa acima de 6 GB)
+NAO EXECUTADO: map irregular frac=0.50 passo=30000 ordem=chave (mesmo motivo acima)
+NAO EXECUTADO: map irregular frac=0.50 passo=6000 ordem=tempo (mesmo motivo acima)
+NAO EXECUTADO: map irregular frac=0.50 passo=6000 ordem=chave (mesmo motivo acima)
+NAO EXECUTADO: map regular frac=0.50 passo=6000 ordem=tempo (estimativa de ~36 GB para K=1441 e frac=0.50; pulado explicitamente em run_all.sh com mensagem SKIP)
+NAO EXECUTADO: map regular frac=0.50 passo=6000 ordem=chave (mesmo motivo acima)
+NAO EXECUTADO: map regular frac=0.50 passo=6000 ordem=aleatorio (mesmo motivo acima)
+NAO EXECUTADO: map k_variavel frac=0.50 passo=6000 ordem=aleatorio (mesmo motivo acima; condicao de skip aplicada em run_all.sh e run_kvariavel.sh)
+
+CORRECAO CSV: linha 96 de resultados/resumo.csv (bplus frac=0.50 passo=6000 irregular=0 ordem=aleatorio) tinha k_variavel=1 incorretamente. Verificado via bplus_f0.50_p6000_reg_aleatorio.csv: leituras=529139523, que corresponde a K fixo (K=1441 * 367203 arestas_td). O arquivo K variavel correto e bplus_f0.50_p6000_kvariavel_aleatorio.csv com leituras=330515487. A linha foi corrigida para k_variavel=0. A linha correta de K variavel com 330515487 leituras esta na linha 131 do resumo.csv.
