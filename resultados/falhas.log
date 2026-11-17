@@ -22,6 +22,6 @@ NAO EXECUTADO: map irregular frac=0.50 passo=6000 ordem=chave (mesmo motivo acim
 NAO EXECUTADO: map regular frac=0.50 passo=6000 ordem=tempo (estimativa de ~36 GB para K=1441 e frac=0.50, sem confirmacao experimental; pulado em run_all.sh com mensagem SKIP)
 NAO EXECUTADO: map regular frac=0.50 passo=6000 ordem=chave (mesmo motivo acima)
 NAO EXECUTADO: map regular frac=0.50 passo=6000 ordem=aleatorio (mesmo motivo acima)
-NAO EXECUTADO: map k_variavel frac=0.50 passo=6000 ordem=aleatorio (mesmo motivo acima; condicao de skip aplicada em run_all.sh e run_kvariavel.sh)
+NAO EXECUTADO: map k_variavel frac=0.50 passo=6000 ordem=aleatorio (motivo nao confirmado; a estimativa de ~36 GB vale para K fixo, e o map k_variavel frac=0.50 passo=6000 ordem=tempo rodou com cerca de 20 GB; a condicao de skip foi aplicada em run_all.sh e run_kvariavel.sh)
 
 CORRECAO CSV: linha 96 de resultados/resumo.csv (bplus frac=0.50 passo=6000 irregular=0 ordem=aleatorio) tinha k_variavel=1 incorretamente. Verificado via bplus_f0.50_p6000_reg_aleatorio.csv: leituras=529139523, que corresponde a K fixo (K=1441 * 367203 arestas_td). O arquivo K variavel correto e bplus_f0.50_p6000_kvariavel_aleatorio.csv com leituras=330515487. A linha foi corrigida para k_variavel=0. A linha correta de K variavel com 330515487 leituras esta na linha 131 do resumo.csv.

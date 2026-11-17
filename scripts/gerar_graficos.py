@@ -498,7 +498,7 @@ if not dB_q.empty:
     _line_iqr(axes[0], dB_q_r, "frac", "variante", ORDEM_ART, PALETA_ART)
     axes[0].set_xlabel("Fração de arestas com histórico")
     axes[0].set_ylabel("Tempo do Dijkstra (ms), mediana")
-    axes[0].set_title("(a) Consulta (ordem=tempo)\nlinha=mediana, faixa=IQR")
+    axes[0].set_title("(a) Tempo do Dijkstra (ordem=tempo)\nlinha=mediana, faixa=IQR")
 
     # painel (b): ingestao em segundos, escala log
     for hue in ORDEM_ART:
